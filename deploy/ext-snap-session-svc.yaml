@@ -1,0 +1,48 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ext-snap-session-svc
+spec:
+  selector:
+    matchLabels:
+      api: ext-snap-session
+      apiserver: "true"
+  replicas: 1
+  template:
+    metadata:
+      labels:
+        api: ext-snap-session
+        apiserver: "true"
+    spec:
+      containers:
+      - name: ext-snap-session-svc
+        image: prasadg193/ext-snap-session-svc:latest
+        volumeMounts:
+        - name: server-certs
+          mountPath: /tmp/certificates
+          readOnly: true
+        env:
+        - name: CBT_SERVER_CERT
+          value: "/tmp/certificates/tls.crt"
+        - name: CBT_SERVER_KEY
+          value: "/tmp/certificates/tls.key"
+      volumes:
+      - name: server-certs
+        secret:
+          secretName: ext-snap-session-svc-certs
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: external-snapshot-session-service
+  labels:
+    api: ext-snap-session
+spec:
+  ports:
+  - name: cbt
+    port: 80
+    protocol: TCP
+    targetPort: 9000
+  selector:
+    api: ext-snap-session
