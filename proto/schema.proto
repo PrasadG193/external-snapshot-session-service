@@ -1,0 +1,41 @@
+// protoc *.proto --go_out=. --go_opt=paths=source_relative --go-grpc_out=. --go-grpc_opt=paths=source_relative
+
+syntax="proto3";
+
+option go_package = "github.com/PrasadG193/sample-ext-snap-session-svc/pkg/grpc";
+
+service SnapshotMetadata {
+	//rpc GetAllocated(GetAllocatedRequest) returns (stream GetAllocatedResponse) {}
+	rpc GetDelta(GetDeltaRequest) returns (stream GetDeltaResponse) {}
+}
+
+message GetDeltaRequest {
+	string session_token = 1;
+	string volume_id = 2;
+	string base_snapshot = 3;
+	string target_snapshot = 4;
+	uint64 starting_byte_offset = 5;
+	uint32 max_results = 6;
+}
+
+enum BlockMetadataType {
+	FIXED_LENGTH=0;
+	VARIABLE_LENGTH=1;
+}
+
+
+message BlockMetadata {
+	uint64 byte_offset = 1;
+	uint64 size_bytes = 2;
+	bytes vendor_specific = 3;
+}
+
+
+message GetDeltaResponse {
+	BlockMetadataType block_metadata_type = 1;
+	uint64 volume_size_bytes = 2;
+	repeated BlockMetadata block_metadata = 3;  
+}
+
+
+
