@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: cbt-client
+  name: cbt-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: cbt-client
+  template:
+    metadata:
+      labels:
+        app: cbt-client
+    spec:
+      serviceAccountName: cbt-client
+      containers:
+      - image: ubuntu
+        name: client
+        command:
+        - sh
+        - -c
+        - tail -f /dev/null
