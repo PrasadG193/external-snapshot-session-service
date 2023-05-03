@@ -40,7 +40,7 @@ type Server struct {
 }
 
 func (s *Server) GetDelta(req *pgrpc.GetDeltaRequest, stream pgrpc.SnapshotMetadata_GetDeltaServer) error {
-	fmt.Println("Received request::", *req)
+	fmt.Println("Received request::", req.String())
 	resp := pgrpc.GetDeltaResponse{
 		BlockMetadataType: pgrpc.BlockMetadataType_FIXED_LENGTH,
 		VolumeSizeBytes:   1024 * 1024 * 1024,
@@ -51,7 +51,8 @@ func (s *Server) GetDelta(req *pgrpc.GetDeltaRequest, stream pgrpc.SnapshotMetad
 			},
 		},
 	}
-	for i := 0; i < 10; i++ {
+	for i := 1; i <= 10; i++ {
+		resp.BlockMetadata[0].ByteOffset = uint64(i)
 		if err := stream.Send(&resp); err != nil {
 			return err
 		}

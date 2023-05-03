@@ -56,11 +56,6 @@ func NewSnapshotMetadata() Client {
 }
 
 func (c *Client) initGRPCClient(cacert []byte, URL string) {
-	//decodeCert, err := base64.StdEncoding.DecodeString(string(cacert))
-	//if err != nil {
-	//	log.Fatal("cannot decode cacert: ", err)
-	//}
-	//fmt.Println("SERVER URL", URL)
 	tlsCredentials, err := loadTLSCredentials(cacert)
 	if err != nil {
 		log.Fatal("cannot load TLS credentials: ", err)
@@ -121,11 +116,18 @@ func (c *Client) GetCSISnapSessionParams(ctx context.Context, baseSnap, targetSn
 func (c *Client) GetChangedBlocks(ctx context.Context, sessionParams *cbtv1alpha1.CSISnapshotSessionAccessStatus) error {
 	fmt.Printf("\n## Making gRPC Call on %s endpoint to Get Changed Blocks Metadata...\n\n", sessionParams.SessionURL)
 	c.initGRPCClient(sessionParams.CACert, sessionParams.SessionURL)
-	stream, err := c.client.GetDelta(ctx, &pgrpc.GetDeltaRequest{})
+	stream, err := c.client.GetDelta(ctx, &pgrpc.GetDeltaRequest{
+		SessionToken:       string(sessionParams.SessionToken),
+		BaseSnapshot:       "vs-005",
+		TargetSnapshot:     "vs-006",
+		StartingByteOffset: 0,
+		MaxResults:         uint32(256),
+	})
 	if err != nil {
 		return err
 	}
 	done := make(chan bool)
+	fmt.Println("Resp received:")
 	go func() {
 		for {
 			resp, err := stream.Recv()
@@ -136,7 +138,8 @@ func (c *Client) GetChangedBlocks(ctx context.Context, sessionParams *cbtv1alpha
 			if err != nil {
 				log.Fatalf("cannot receive %v", err)
 			}
-			log.Printf("Resp received: %s\n", resp.String())
+			respJson, _ := json.Marshal(resp)
+			fmt.Println(string(respJson))
 		}
 	}()
 
@@ -146,13 +149,6 @@ func (c *Client) GetChangedBlocks(ctx context.Context, sessionParams *cbtv1alpha
 }
 
 func loadTLSCredentials(cacert []byte) (credentials.TransportCredentials, error) {
-	// Load certificate of the CA who signed server's certificate
-	//cert := os.Getenv("CA_CERT")
-	//pemServerCA, err := ioutil.ReadFile(cert)
-	//if err != nil {
-	//	return nil, err
-	//}
-	//fmt.Println("CACERT::", string(cacert))
 	certPool := x509.NewCertPool()
 	if !certPool.AppendCertsFromPEM(cacert) {
 		return nil, fmt.Errorf("failed to add server CA's certificate")
