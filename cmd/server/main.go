@@ -7,7 +7,7 @@ import (
 	"net"
 	"os"
 
-	pgrpc "github.com/PrasadG193/sample-ext-snap-session-svc/pkg/grpc"
+	pgrpc "github.com/PrasadG193/external-snapshot-session-service/pkg/grpc"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"

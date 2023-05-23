@@ -1,4 +1,4 @@
-module github.com/PrasadG193/sample-ext-snap-session-svc
+module github.com/PrasadG193/external-snapshot-session-service
 
 go 1.19
 

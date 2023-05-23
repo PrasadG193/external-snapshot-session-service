@@ -2,7 +2,7 @@
 
 syntax="proto3";
 
-option go_package = "github.com/PrasadG193/sample-ext-snap-session-svc/pkg/grpc";
+option go_package = "github.com/PrasadG193/external-snapshot-session-service/pkg/grpc";
 
 service SnapshotMetadata {
 	//rpc GetAllocated(GetAllocatedRequest) returns (stream GetAllocatedResponse) {}

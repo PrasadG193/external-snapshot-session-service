@@ -1,1 +1,1 @@
-# sample-ext-snap-session-svc
+# external-snapshot-session-service

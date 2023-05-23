@@ -11,7 +11,7 @@ import (
 	"time"
 
 	cbtv1alpha1 "github.com/PrasadG193/cbt-datapath/pkg/api/cbt/v1alpha1"
-	pgrpc "github.com/PrasadG193/sample-ext-snap-session-svc/pkg/grpc"
+	pgrpc "github.com/PrasadG193/external-snapshot-session-service/pkg/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
