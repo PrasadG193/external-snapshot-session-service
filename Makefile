@@ -1,7 +1,7 @@
 GOOS ?= linux
 GOARCH ?= amd64
 
-IMAGE_REPO_SERVER ?= prasadg193/ext-snap-session-svc
+IMAGE_REPO_SERVER ?= prasadg193/external-snapshot-session-service
 IMAGE_TAG_SERVER ?= latest
 
 .PHONY: proto
@@ -18,7 +18,7 @@ build:
 	CGO_ENABLED=0 GOOS=$(GOOS) GOARCH=$(GOARCH) go build  -o grpc-client ./cmd/client/main.go
 
 image:
-	docker build -t $(IMAGE_REPO_SERVER):$(IMAGE_TAG_SERVER) -f Dockerfile-grpc .
+	docker buildx build --platform=linux/amd64 -t $(IMAGE_REPO_SERVER):$(IMAGE_TAG_SERVER) -f Dockerfile-grpc .
 
 push:
 	docker push $(IMAGE_REPO_SERVER):$(IMAGE_TAG_SERVER)
