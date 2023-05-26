@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ext-snap-session-svc
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ext-snap-session-svc-clusterrole
+rules:
+- apiGroups:
+  - cbt.storage.k8s.io
+  resources:
+  - csisnapshotsessiondata
+  verbs:
+  - get
+  - list
+  - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ext-snap-session-svc-crb
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ext-snap-session-svc-clusterrole
+subjects:
+- kind: ServiceAccount
+  name: ext-snap-session-svc
+  namespace: kube-system

@@ -6,8 +6,8 @@ COPY pkg pkg
 COPY ./cmd/server/main.go main.go
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o grpc-server main.go
 
-FROM gcr.io/distroless/static:nonroot
+FROM alpine
+RUN apk add util-linux coreutils && apk update && apk upgrade
 WORKDIR /
 COPY --from=builder /workspace/grpc-server .
-USER 65532:65532
 ENTRYPOINT ["/grpc-server"]

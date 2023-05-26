@@ -15,13 +15,25 @@ spec:
         api: ext-snap-session
         apiserver: "true"
     spec:
+      serviceAccountName: ext-snap-session-svc
       containers:
+      - name: csi-hostpath-cbt-service
+        image: prasadg193/sample-csi-cbt-service:latest
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /csi
+          name: socket-dir
       - name: ext-snap-session-svc
-        image: prasadg193/ext-snap-session-svc:latest
+        image: prasadg193/external-snapshot-session-service:latest
+        securityContext:
+          privileged: true
         volumeMounts:
         - name: server-certs
           mountPath: /tmp/certificates
           readOnly: true
+        - mountPath: /csi
+          name: socket-dir
         env:
         - name: CBT_SERVER_CERT
           value: "/tmp/certificates/tls.crt"
@@ -31,6 +43,19 @@ spec:
       - name: server-certs
         secret:
           secretName: ext-snap-session-svc-certs
+      - hostPath:
+          path: /var/lib/kubelet/plugins/cbt/csi-hostpath
+          type: DirectoryOrCreate
+        name: socket-dir
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ext-snap-session-svc-certs
+type: kubernetes.io/tls
+data:
+  tls.crt: 
+  tls.key: 
 ---
 apiVersion: v1
 kind: Service
