@@ -23,19 +23,14 @@ enum BlockMetadataType {
 	VARIABLE_LENGTH=1;
 }
 
-
 message BlockMetadata {
 	uint64 byte_offset = 1;
 	uint64 size_bytes = 2;
 	bytes vendor_specific = 3;
 }
 
-
 message GetDeltaResponse {
 	BlockMetadataType block_metadata_type = 1;
 	uint64 volume_size_bytes = 2;
 	repeated BlockMetadata block_metadata = 3;  
 }
-
-
-
