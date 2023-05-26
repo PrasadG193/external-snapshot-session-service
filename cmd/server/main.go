@@ -1,17 +1,32 @@
 package main
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
 
-	pgrpc "github.com/PrasadG193/external-snapshot-session-service/pkg/grpc"
-
+	cbtv1alpha1 "github.com/PrasadG193/external-snapshot-session-access/pkg/api/cbt/v1alpha1"
+	ssa "github.com/PrasadG193/external-snapshot-session-access/pkg/controller"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/rest"
+
+	pgrpc "github.com/PrasadG193/external-snapshot-session-service/pkg/grpc"
+)
+
+const (
+	PROTOCOL = "unix"
+	SOCKET   = "/csi/csi.sock"
 )
 
 func main() {
@@ -28,36 +43,148 @@ func main() {
 		grpc.Creds(tlsCredentials),
 	)
 	reflection.Register(s)
-	pgrpc.RegisterSnapshotMetadataServer(s, &Server{})
+	pgrpc.RegisterSnapshotMetadataServer(s, newServer())
 	fmt.Println("SERVER STARTED!")
 	if err := s.Serve(listener); err != nil {
 		log.Fatal(err)
 	}
 }
 
+func newServer() *Server {
+	kubeConfig, err := rest.InClusterConfig()
+	if err != nil {
+		log.Fatalf("could not init in cluster config %v", err)
+	}
+	dynCli, err := dynamic.NewForConfig(kubeConfig)
+	if err != nil {
+		log.Fatalf("failed to create dynamic client %v", err)
+	}
+	return &Server{
+		kubeCli: dynCli,
+	}
+}
+
 type Server struct {
+	client pgrpc.SnapshotMetadataClient
 	pgrpc.UnimplementedSnapshotMetadataServer
+	kubeCli dynamic.Interface
+}
+
+func (s *Server) convertParams(ctx context.Context, req *pgrpc.GetDeltaRequest) (*pgrpc.GetDeltaRequest, error) {
+	// 1. Fetch CSISnapshotSessionData resource for the given token
+	log.Println("Fetching CSISnapshotSessionData resource for the token", req.SessionToken)
+	ssd, err := s.findSnapshotSessionData(ctx, req.SessionToken)
+	if err != nil {
+		return nil, err
+	}
+	// 2. Validate the session parameters
+	return s.validateAndTranslateParams(ctx, req, ssd)
+}
+
+func (s *Server) validateAndTranslateParams(ctx context.Context, req *pgrpc.GetDeltaRequest, ssd *cbtv1alpha1.CSISnapshotSessionData) (*pgrpc.GetDeltaRequest, error) {
+	newReq := pgrpc.GetDeltaRequest{}
+	// The session token is valid for basesnapshot
+	for _, snap := range ssd.Spec.Snapshots {
+		if snap.Name == req.BaseSnapshot {
+			newReq.BaseSnapshot = snap.ID
+			continue
+		}
+		if snap.Name == req.TargetSnapshot {
+			newReq.TargetSnapshot = snap.ID
+			continue
+		}
+	}
+	// Return error if the SnapSessionData doesn't have entry for the snaps in request
+	if newReq.BaseSnapshot == "" || newReq.TargetSnapshot == "" {
+		return nil, fmt.Errorf("Invalid token for specified volumesnapshots in the request")
+	}
+	newReq.StartingByteOffset = req.StartingByteOffset
+	newReq.MaxResults = req.MaxResults
+	return &newReq, nil
+}
+
+func (s *Server) findSnapshotSessionData(ctx context.Context, token string) (*cbtv1alpha1.CSISnapshotSessionData, error) {
+	gvr := schema.GroupVersionResource{Group: "cbt.storage.k8s.io", Version: "v1alpha1", Resource: "csisnapshotsessiondata"}
+	usList, err := s.kubeCli.Resource(gvr).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, err
+	}
+	for _, us := range usList.Items {
+		fmt.Printf("Found CSISnapshotSessionData: %s check if matches with  %s\n", us.GetName(), ssa.SnapSessionDataNameWithToken(token))
+		if us.GetName() == ssa.SnapSessionDataNameWithToken(token) {
+			//us, err := s.kubeCli.Resource(gvr).Namespace(appNamespace).Get(ctx, ssa.SnapSessionDataName(token), metav1.GetOptions{})
+			var ssd cbtv1alpha1.CSISnapshotSessionData
+			err = runtime.DefaultUnstructuredConverter.FromUnstructured(us.UnstructuredContent(), &ssd)
+			if err != nil {
+				return nil, err
+			}
+			return &ssd, nil
+		}
+	}
+	return nil, fmt.Errorf("Not found csisnapshotsessiondata resource for the token")
 }
 
 func (s *Server) GetDelta(req *pgrpc.GetDeltaRequest, stream pgrpc.SnapshotMetadata_GetDeltaServer) error {
 	fmt.Println("Received request::", req.String())
-	resp := pgrpc.GetDeltaResponse{
-		BlockMetadataType: pgrpc.BlockMetadataType_FIXED_LENGTH,
-		VolumeSizeBytes:   1024 * 1024 * 1024,
-		BlockMetadata: []*pgrpc.BlockMetadata{
-			&pgrpc.BlockMetadata{
-				ByteOffset: 1,
-				SizeBytes:  1024 * 1024,
-			},
-		},
+
+	// TODO: Implement proxy service
+
+	s.initGRPCClient()
+	ctx := context.Background()
+	spReq, err := s.convertParams(ctx, req)
+	if err != nil {
+		return err
 	}
-	for i := 1; i <= 10; i++ {
-		resp.BlockMetadata[0].ByteOffset = uint64(i)
-		if err := stream.Send(&resp); err != nil {
-			return err
+
+	csiStream, err := s.client.GetDelta(ctx, spReq)
+
+	if err != nil {
+		return err
+	}
+	done := make(chan bool)
+	fmt.Println("Resp received:")
+	go func() {
+		for {
+			resp, err := csiStream.Recv()
+			if err == io.EOF {
+				done <- true //means stream is finished
+				return
+			}
+			if err != nil {
+				log.Printf(fmt.Sprintf("cannot receive %v", err))
+				return
+			}
+			//respJson, _ := json.Marshal(resp)
+			//fmt.Println(string(respJson))
+			if err := stream.Send(resp); err != nil {
+				log.Printf(fmt.Sprintf("cannot send %v", err))
+				return
+			}
 		}
-	}
+	}()
+
+	<-done //we will wait until all response is received
+	log.Println("Received response from csi driver")
+
 	return nil
+}
+
+func (s *Server) initGRPCClient() {
+	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
+		var d net.Dialer
+		return d.DialContext(ctx, PROTOCOL, addr)
+	}
+	options := []grpc.DialOption{
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithBlock(),
+		grpc.WithContextDialer(dialer),
+	}
+	conn, err := grpc.Dial(SOCKET, options...)
+	if err != nil {
+		log.Fatalf("did not connect: %v", err)
+	}
+	s.client = pgrpc.NewSnapshotMetadataClient(conn)
+
 }
 
 func loadTLSCredentials() (credentials.TransportCredentials, error) {

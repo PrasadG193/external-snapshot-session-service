@@ -10,7 +10,7 @@ import (
 	"log"
 	"time"
 
-	cbtv1alpha1 "github.com/PrasadG193/cbt-datapath/pkg/api/cbt/v1alpha1"
+	cbtv1alpha1 "github.com/PrasadG193/external-snapshot-session-access/pkg/api/cbt/v1alpha1"
 	pgrpc "github.com/PrasadG193/external-snapshot-session-service/pkg/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -24,9 +24,9 @@ import (
 )
 
 const (
-	baseVolumeSnapshot   = "vs-005"
-	targetVolumeSnapshot = "vs-006"
-	clientNamespace      = "cbt-test"
+	baseVolumeSnapshot   = "snapshot-csi-pvc-jrx5c"
+	targetVolumeSnapshot = "snapshot-csi-pvc-jr7tp"
+	appNamespace         = "default"
 )
 
 var gvr = schema.GroupVersionResource{Group: "cbt.storage.k8s.io", Version: "v1alpha1", Resource: "csisnapshotsessionaccesses"}
@@ -78,7 +78,7 @@ func (c *Client) initGRPCClient(cacert []byte, URL string) {
 
 // Create session and get session parameters with custom resource CSISnapshotSessionAccess
 func (c *Client) setupSession(ctx context.Context, baseSnap, targetSnap string) (*cbtv1alpha1.CSISnapshotSessionAccessStatus, error) {
-	fmt.Printf("## Creating CSI Snapshot Session...\n\n")
+	fmt.Printf("## Creating CSI Snapshot Session in %s namespace...\n\n", appNamespace)
 	objectName, err := c.createSessionObject(ctx, baseSnap, targetSnap)
 	if err != nil {
 		return nil, err
@@ -116,7 +116,7 @@ func (c *Client) createSessionObject(ctx context.Context, baseSnap, targetSnap s
 			},
 		},
 	}
-	us, err := c.kubeCli.Resource(gvr).Namespace(clientNamespace).Create(context.TODO(), object, metav1.CreateOptions{})
+	us, err := c.kubeCli.Resource(gvr).Namespace(appNamespace).Create(context.TODO(), object, metav1.CreateOptions{})
 	if err != nil {
 		return "", err
 	}
@@ -125,7 +125,7 @@ func (c *Client) createSessionObject(ctx context.Context, baseSnap, targetSnap s
 
 func (c *Client) getSessionStatus(ctx context.Context, objectName string) (*cbtv1alpha1.CSISnapshotSessionAccessStatus, error) {
 	var ssa cbtv1alpha1.CSISnapshotSessionAccess
-	us, err := c.kubeCli.Resource(gvr).Namespace(clientNamespace).Get(context.TODO(), objectName, metav1.GetOptions{})
+	us, err := c.kubeCli.Resource(gvr).Namespace(appNamespace).Get(context.TODO(), objectName, metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
