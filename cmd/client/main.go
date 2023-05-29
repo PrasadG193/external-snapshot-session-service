@@ -10,7 +10,7 @@ import (
 	"log"
 	"time"
 
-	cbtv1alpha1 "github.com/PrasadG193/external-snapshot-session-access/pkg/api/cbt/v1alpha1"
+	cbtv1alpha1 "github.com/PrasadG193/snapshot-session-access/pkg/api/cbt/v1alpha1"
 	pgrpc "github.com/PrasadG193/external-snapshot-session-service/pkg/grpc"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"

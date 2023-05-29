@@ -9,8 +9,8 @@ import (
 	"net"
 	"os"
 
-	cbtv1alpha1 "github.com/PrasadG193/external-snapshot-session-access/pkg/api/cbt/v1alpha1"
-	ssa "github.com/PrasadG193/external-snapshot-session-access/pkg/controller"
+	cbtv1alpha1 "github.com/PrasadG193/snapshot-session-access/pkg/api/cbt/v1alpha1"
+	ssa "github.com/PrasadG193/snapshot-session-access/pkg/controller"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -86,11 +86,12 @@ func (s *Server) validateAndTranslateParams(ctx context.Context, req *pgrpc.GetD
 	// The session token is valid for basesnapshot
 	for _, snap := range ssd.Spec.Snapshots {
 		if snap.Name == req.BaseSnapshot {
-			newReq.BaseSnapshot = snap.ID
+			newReq.BaseSnapshot = snap.SnapshotHandle
+			newReq.VolumeId = snap.VolumeHandle
 			continue
 		}
 		if snap.Name == req.TargetSnapshot {
-			newReq.TargetSnapshot = snap.ID
+			newReq.TargetSnapshot = snap.SnapshotHandle
 			continue
 		}
 	}
@@ -124,25 +125,22 @@ func (s *Server) findSnapshotSessionData(ctx context.Context, token string) (*cb
 	return nil, fmt.Errorf("Not found csisnapshotsessiondata resource for the token")
 }
 
-func (s *Server) GetDelta(req *pgrpc.GetDeltaRequest, stream pgrpc.SnapshotMetadata_GetDeltaServer) error {
-	fmt.Println("Received request::", req.String())
+func (s *Server) GetDelta(req *pgrpc.GetDeltaRequest, cbtClientStream pgrpc.SnapshotMetadata_GetDeltaServer) error {
+	log.Println("Received request::", req.String())
 
-	// TODO: Implement proxy service
-
-	s.initGRPCClient()
+	s.initCSIGRPCClient()
 	ctx := context.Background()
 	spReq, err := s.convertParams(ctx, req)
 	if err != nil {
 		return err
 	}
 
+	// Call CSI Driver's GetDelta gRPC
 	csiStream, err := s.client.GetDelta(ctx, spReq)
-
 	if err != nil {
 		return err
 	}
 	done := make(chan bool)
-	fmt.Println("Resp received:")
 	go func() {
 		for {
 			resp, err := csiStream.Recv()
@@ -154,22 +152,18 @@ func (s *Server) GetDelta(req *pgrpc.GetDeltaRequest, stream pgrpc.SnapshotMetad
 				log.Printf(fmt.Sprintf("cannot receive %v", err))
 				return
 			}
-			//respJson, _ := json.Marshal(resp)
-			//fmt.Println(string(respJson))
-			if err := stream.Send(resp); err != nil {
+			log.Println("Received response from csi driver, proxying to client")
+			if err := cbtClientStream.Send(resp); err != nil {
 				log.Printf(fmt.Sprintf("cannot send %v", err))
 				return
 			}
 		}
 	}()
-
 	<-done //we will wait until all response is received
-	log.Println("Received response from csi driver")
-
 	return nil
 }
 
-func (s *Server) initGRPCClient() {
+func (s *Server) initCSIGRPCClient() {
 	dialer := func(ctx context.Context, addr string) (net.Conn, error) {
 		var d net.Dialer
 		return d.DialContext(ctx, PROTOCOL, addr)

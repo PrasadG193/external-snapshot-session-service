@@ -3,7 +3,7 @@ module github.com/PrasadG193/external-snapshot-session-service
 go 1.19
 
 require (
-	github.com/PrasadG193/external-snapshot-session-access v0.0.0-20230526120748-64f62ebaf852
+	github.com/PrasadG193/snapshot-session-access v0.0.0-20230529142340-25c76813361c
 	google.golang.org/grpc v1.49.0
 	google.golang.org/protobuf v1.28.1
 	k8s.io/apimachinery v0.26.3
