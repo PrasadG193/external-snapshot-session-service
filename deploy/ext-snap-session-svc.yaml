@@ -39,6 +39,10 @@ spec:
           value: "/tmp/certificates/tls.crt"
         - name: CBT_SERVER_KEY
           value: "/tmp/certificates/tls.key"
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
       volumes:
       - name: server-certs
         secret:
@@ -47,15 +51,6 @@ spec:
           path: /var/lib/kubelet/plugins/cbt/csi-hostpath
           type: DirectoryOrCreate
         name: socket-dir
----
-apiVersion: v1
-kind: Secret
-metadata:
-  name: ext-snap-session-svc-certs
-type: kubernetes.io/tls
-data:
-  tls.crt: 
-  tls.key: 
 ---
 apiVersion: v1
 kind: Service

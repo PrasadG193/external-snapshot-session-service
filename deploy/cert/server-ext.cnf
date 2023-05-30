@@ -1,1 +1,1 @@
-subjectAltName=DNS:.kube-system,DNS:external-snapshot-session-service.kube-system,DNS:external-snapshot-session-service.default,IP:0.0.0.0
+subjectAltName=DNS:.csi-driver,DNS:external-snapshot-session-service.csi-driver,DNS:external-snapshot-session-service.default,IP:0.0.0.0
