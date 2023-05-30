@@ -5,13 +5,14 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"flag"
 	"fmt"
 	"io"
 	"log"
 	"time"
 
-	cbtv1alpha1 "github.com/PrasadG193/snapshot-session-access/pkg/api/cbt/v1alpha1"
 	pgrpc "github.com/PrasadG193/external-snapshot-session-service/pkg/grpc"
+	cbtv1alpha1 "github.com/PrasadG193/snapshot-session-access/pkg/api/cbt/v1alpha1"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -23,23 +24,28 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-const (
-	baseVolumeSnapshot   = "snapshot-csi-pvc-jrx5c"
-	targetVolumeSnapshot = "snapshot-csi-pvc-jr7tp"
-	appNamespace         = "default"
-)
-
 var gvr = schema.GroupVersionResource{Group: "cbt.storage.k8s.io", Version: "v1alpha1", Resource: "csisnapshotsessionaccesses"}
 
 func main() {
+
+	var baseVolumeSnapshot, targetVolumeSnapshot, appNamespace string
+	flag.StringVar(&baseVolumeSnapshot, "base", "", "base volume snapshot name")
+	flag.StringVar(&targetVolumeSnapshot, "target", "", "target volume snapshot name")
+	flag.StringVar(&appNamespace, "namespace", "default", "app namespace")
+	flag.Parse()
+
+	if baseVolumeSnapshot == "" || targetVolumeSnapshot == "" {
+		log.Fatal("base or target volumesnapshot is missing")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	client := NewSnapshotMetadata()
-	sessionParams, err := client.setupSession(ctx, baseVolumeSnapshot, targetVolumeSnapshot)
+	sessionParams, err := client.setupSession(ctx, baseVolumeSnapshot, targetVolumeSnapshot, appNamespace)
 	if err != nil {
 		log.Fatalf("could not get session params %v", err)
 	}
-	if err := client.getChangedBlocks(ctx, sessionParams); err != nil {
+	if err := client.getChangedBlocks(ctx, sessionParams, baseVolumeSnapshot, targetVolumeSnapshot); err != nil {
 		log.Fatalf("could not get changed blocks %v", err)
 	}
 }
@@ -77,15 +83,15 @@ func (c *Client) initGRPCClient(cacert []byte, URL string) {
 }
 
 // Create session and get session parameters with custom resource CSISnapshotSessionAccess
-func (c *Client) setupSession(ctx context.Context, baseSnap, targetSnap string) (*cbtv1alpha1.CSISnapshotSessionAccessStatus, error) {
+func (c *Client) setupSession(ctx context.Context, baseSnap, targetSnap, appNamespace string) (*cbtv1alpha1.CSISnapshotSessionAccessStatus, error) {
 	fmt.Printf("## Creating CSI Snapshot Session in %s namespace...\n\n", appNamespace)
-	objectName, err := c.createSessionObject(ctx, baseSnap, targetSnap)
+	objectName, err := c.createSessionObject(ctx, baseSnap, targetSnap, appNamespace)
 	if err != nil {
 		return nil, err
 	}
 	retryCount := 20
 	for i := 0; i < retryCount; i++ {
-		status, err := c.getSessionStatus(ctx, objectName)
+		status, err := c.getSessionStatus(ctx, objectName, appNamespace)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +106,7 @@ func (c *Client) setupSession(ctx context.Context, baseSnap, targetSnap string) 
 }
 
 // Create session with CSISnapshotSessionAccess CR
-func (c *Client) createSessionObject(ctx context.Context, baseSnap, targetSnap string) (string, error) {
+func (c *Client) createSessionObject(ctx context.Context, baseSnap, targetSnap, appNamespace string) (string, error) {
 	object := &unstructured.Unstructured{
 		Object: map[string]interface{}{
 			"apiVersion": "cbt.storage.k8s.io/v1alpha1",
@@ -123,7 +129,7 @@ func (c *Client) createSessionObject(ctx context.Context, baseSnap, targetSnap s
 	return us.GetName(), nil
 }
 
-func (c *Client) getSessionStatus(ctx context.Context, objectName string) (*cbtv1alpha1.CSISnapshotSessionAccessStatus, error) {
+func (c *Client) getSessionStatus(ctx context.Context, objectName, appNamespace string) (*cbtv1alpha1.CSISnapshotSessionAccessStatus, error) {
 	var ssa cbtv1alpha1.CSISnapshotSessionAccess
 	us, err := c.kubeCli.Resource(gvr).Namespace(appNamespace).Get(context.TODO(), objectName, metav1.GetOptions{})
 	if err != nil {
@@ -141,7 +147,12 @@ func (c *Client) getSessionStatus(ctx context.Context, objectName string) (*cbtv
 // The session is created using CSISnapshotSessionAccess resource
 // Server auth at client side is done with CA Cert received in session params
 // The token is used to in the req parameter which is used by the server to authenticate the client
-func (c *Client) getChangedBlocks(ctx context.Context, sessionParams *cbtv1alpha1.CSISnapshotSessionAccessStatus) error {
+func (c *Client) getChangedBlocks(
+	ctx context.Context,
+	sessionParams *cbtv1alpha1.CSISnapshotSessionAccessStatus,
+	baseVolumeSnapshot string,
+	targetVolumeSnapshot string,
+) error {
 	fmt.Printf("\n## Making gRPC Call on %s endpoint to Get Changed Blocks Metadata...\n\n", sessionParams.SessionURL)
 
 	c.initGRPCClient(sessionParams.CACert, sessionParams.SessionURL)

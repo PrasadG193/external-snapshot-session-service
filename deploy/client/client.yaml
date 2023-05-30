@@ -16,7 +16,7 @@ spec:
     spec:
       serviceAccountName: cbt-client
       containers:
-      - image: ubuntu
+      - image: prasadg193/sample-cbt-client:latest
         name: client
         command:
         - sh

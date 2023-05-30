@@ -3,6 +3,8 @@ GOARCH ?= amd64
 
 IMAGE_REPO_SERVER ?= prasadg193/external-snapshot-session-service
 IMAGE_TAG_SERVER ?= latest
+IMAGE_REPO_CLIENT ?= prasadg193/sample-cbt-client
+IMAGE_TAG_CLIENT ?= latest
 
 .PHONY: proto
 proto:
@@ -19,8 +21,8 @@ build:
 
 image:
 	docker buildx build --platform=linux/amd64 -t $(IMAGE_REPO_SERVER):$(IMAGE_TAG_SERVER) -f Dockerfile-grpc .
+	docker buildx build --platform=linux/amd64 -t $(IMAGE_REPO_CLIENT):$(IMAGE_TAG_CLIENT) -f Dockerfile-grpc-client .
 
 push:
 	docker push $(IMAGE_REPO_SERVER):$(IMAGE_TAG_SERVER)
-
-
+	docker push $(IMAGE_REPO_CLIENT):$(IMAGE_TAG_CLIENT)
