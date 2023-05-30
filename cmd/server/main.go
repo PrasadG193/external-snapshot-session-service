@@ -27,6 +27,8 @@ import (
 const (
 	PROTOCOL = "unix"
 	SOCKET   = "/csi/csi.sock"
+
+	podNamespaceEnvKey = "POD_NAMESPACE"
 )
 
 func main() {
@@ -44,7 +46,7 @@ func main() {
 	)
 	reflection.Register(s)
 	pgrpc.RegisterSnapshotMetadataServer(s, newServer())
-	fmt.Println("SERVER STARTED!")
+	log.Println("SERVER STARTED!")
 	if err := s.Serve(listener); err != nil {
 		log.Fatal(err)
 	}
@@ -106,23 +108,17 @@ func (s *Server) validateAndTranslateParams(ctx context.Context, req *pgrpc.GetD
 
 func (s *Server) findSnapshotSessionData(ctx context.Context, token string) (*cbtv1alpha1.CSISnapshotSessionData, error) {
 	gvr := schema.GroupVersionResource{Group: "cbt.storage.k8s.io", Version: "v1alpha1", Resource: "csisnapshotsessiondata"}
-	usList, err := s.kubeCli.Resource(gvr).Namespace(metav1.NamespaceAll).List(ctx, metav1.ListOptions{})
+	us, err := s.kubeCli.Resource(gvr).Namespace(os.Getenv(podNamespaceEnvKey)).Get(ctx, ssa.SnapSessionDataNameWithToken(token), metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("Not found csisnapshotsessiondata resource for the token, %v", err)
+	}
+	log.Printf("Found CSISnapshotSessionData: %s for the token  %s\n", us.GetName(), token)
+	var ssd cbtv1alpha1.CSISnapshotSessionData
+	err = runtime.DefaultUnstructuredConverter.FromUnstructured(us.UnstructuredContent(), &ssd)
 	if err != nil {
 		return nil, err
 	}
-	for _, us := range usList.Items {
-		fmt.Printf("Found CSISnapshotSessionData: %s check if matches with  %s\n", us.GetName(), ssa.SnapSessionDataNameWithToken(token))
-		if us.GetName() == ssa.SnapSessionDataNameWithToken(token) {
-			//us, err := s.kubeCli.Resource(gvr).Namespace(appNamespace).Get(ctx, ssa.SnapSessionDataName(token), metav1.GetOptions{})
-			var ssd cbtv1alpha1.CSISnapshotSessionData
-			err = runtime.DefaultUnstructuredConverter.FromUnstructured(us.UnstructuredContent(), &ssd)
-			if err != nil {
-				return nil, err
-			}
-			return &ssd, nil
-		}
-	}
-	return nil, fmt.Errorf("Not found csisnapshotsessiondata resource for the token")
+	return &ssd, nil
 }
 
 func (s *Server) GetDelta(req *pgrpc.GetDeltaRequest, cbtClientStream pgrpc.SnapshotMetadata_GetDeltaServer) error {
