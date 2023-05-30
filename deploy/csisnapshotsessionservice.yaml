@@ -1,0 +1,9 @@
+apiVersion: cbt.storage.k8s.io/v1alpha1
+kind: CSISnapshotSessionService
+metadata:
+  generateName: csi-hostpath-
+  labels:
+    cbt.storage.k8s.io/driver: hostpath.csi.k8s.io
+spec:
+  address: external-snapshot-session-service.csi-driver:80
+  caCert: GENERATED_CA_CERT
