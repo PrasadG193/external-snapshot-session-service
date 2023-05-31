@@ -10,7 +10,6 @@ import (
 	"os"
 
 	cbtv1alpha1 "github.com/PrasadG193/snapshot-session-access/pkg/api/cbt/v1alpha1"
-	ssa "github.com/PrasadG193/snapshot-session-access/pkg/controller"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
 	"google.golang.org/grpc/credentials/insecure"
@@ -85,15 +84,19 @@ func (s *Server) convertParams(ctx context.Context, req *pgrpc.GetDeltaRequest) 
 
 func (s *Server) validateAndTranslateParams(ctx context.Context, req *pgrpc.GetDeltaRequest, ssd *cbtv1alpha1.CSISnapshotSessionData) (*pgrpc.GetDeltaRequest, error) {
 	newReq := pgrpc.GetDeltaRequest{}
+	log.Println("Validating and translating snapshot names to IDs ")
+	log.Println("Checking if CSISnapshotSessionData contains the snapshot entries from req")
 	// The session token is valid for basesnapshot
 	for _, snap := range ssd.Spec.Snapshots {
 		if snap.Name == req.BaseSnapshot {
 			newReq.BaseSnapshot = snap.SnapshotHandle
 			newReq.VolumeId = snap.VolumeHandle
+			log.Printf("Mapping snapshot %s to snapshot id %s\n", req.BaseSnapshot, snap.SnapshotHandle)
 			continue
 		}
 		if snap.Name == req.TargetSnapshot {
 			newReq.TargetSnapshot = snap.SnapshotHandle
+			log.Printf("Mapping snapshot %s to snapshot id %s\n", req.TargetSnapshot, snap.SnapshotHandle)
 			continue
 		}
 	}
@@ -107,8 +110,9 @@ func (s *Server) validateAndTranslateParams(ctx context.Context, req *pgrpc.GetD
 }
 
 func (s *Server) findSnapshotSessionData(ctx context.Context, token string) (*cbtv1alpha1.CSISnapshotSessionData, error) {
+	log.Printf("Serching for CSISnapshotSessionData resource for the token  %s\n", token)
 	gvr := schema.GroupVersionResource{Group: "cbt.storage.k8s.io", Version: "v1alpha1", Resource: "csisnapshotsessiondata"}
-	us, err := s.kubeCli.Resource(gvr).Namespace(os.Getenv(podNamespaceEnvKey)).Get(ctx, ssa.SnapSessionDataNameWithToken(token), metav1.GetOptions{})
+	us, err := s.kubeCli.Resource(gvr).Namespace(os.Getenv(podNamespaceEnvKey)).Get(ctx, token, metav1.GetOptions{})
 	if err != nil {
 		return nil, fmt.Errorf("Not found csisnapshotsessiondata resource for the token, %v", err)
 	}
@@ -141,6 +145,7 @@ func (s *Server) GetDelta(req *pgrpc.GetDeltaRequest, cbtClientStream pgrpc.Snap
 		for {
 			resp, err := csiStream.Recv()
 			if err == io.EOF {
+				log.Println("Received EOF")
 				done <- true //means stream is finished
 				return
 			}
