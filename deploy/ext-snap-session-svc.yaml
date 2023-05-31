@@ -42,14 +42,12 @@ metadata:
 spec:
   selector:
     matchLabels:
-      api: ext-snap-session
-      apiserver: "true"
+      name: external-snapshot-session-service
   replicas: 1
   template:
     metadata:
       labels:
-        api: ext-snap-session
-        apiserver: "true"
+        name: external-snapshot-session-service
     spec:
       serviceAccountName: external-snapshot-session-service
       containers:
@@ -93,12 +91,12 @@ kind: Service
 metadata:
   name: external-snapshot-session-service
   labels:
-    api: ext-snap-session
+    name: external-snapshot-session-service
 spec:
   ports:
   - name: cbt
-    port: 80
+    port: 6443
     protocol: TCP
     targetPort: 9000
   selector:
-    api: ext-snap-session
+    name: external-snapshot-session-service
