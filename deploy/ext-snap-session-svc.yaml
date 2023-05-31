@@ -1,39 +1,44 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: ext-snap-session-svc
+  name: external-snapshot-session-service
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
+kind: Role
 metadata:
-  name: ext-snap-session-svc-clusterrole
+  name: csi-snapshot-session-service-cluster-role
 rules:
 - apiGroups:
   - cbt.storage.k8s.io
   resources:
   - csisnapshotsessiondata
+  - csisnapshotsessionservice
   verbs:
   - get
   - list
   - watch
+  - create
+  - update
+  - patch
+  - delete
 ---
 apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
+kind: RoleBinding
 metadata:
-  name: ext-snap-session-svc-crb
+  name: csi-snapshot-session-service-cluster-role-binding
 roleRef:
   apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: ext-snap-session-svc-clusterrole
+  kind: Role
+  name: csi-snapshot-session-service-cluster-role
 subjects:
 - kind: ServiceAccount
-  name: ext-snap-session-svc
+  name: external-snapshot-session-service
   namespace: csi-driver
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: ext-snap-session-svc
+  name: external-snapshot-session-service
 spec:
   selector:
     matchLabels:
@@ -46,7 +51,7 @@ spec:
         api: ext-snap-session
         apiserver: "true"
     spec:
-      serviceAccountName: ext-snap-session-svc
+      serviceAccountName: external-snapshot-session-service
       containers:
       - name: csi-hostpath-cbt-service
         image: prasadg193/sample-csi-cbt-service:latest
@@ -55,7 +60,7 @@ spec:
         volumeMounts:
         - mountPath: /csi
           name: socket-dir
-      - name: ext-snap-session-svc
+      - name: external-snapshot-session-service
         image: prasadg193/external-snapshot-session-service:latest
         securityContext:
           privileged: true
